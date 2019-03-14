@@ -7,16 +7,36 @@ import io.pleo.antaeus.core.external.PaymentProvider
 import io.pleo.antaeus.models.Invoice
 import io.pleo.antaeus.models.InvoiceStatus
 import kotlinx.coroutines.*
+import java.sql.Date
+import java.time.LocalDate
+import java.time.LocalDateTime
+import java.util.*
+import kotlin.concurrent.fixedRateTimer
 
 
+const val DAY_OF_THE_MONTH = 1
 const val TIMEOUT = 3000L
 const val RETRIES = 5
 
 
 class BillingService(
-    private val paymentProvider: PaymentProvider,
-    private val invoiceService: InvoiceService
+        private val paymentProvider: PaymentProvider,
+        private val invoiceService: InvoiceService
 ) {
+
+    fun start(): Timer {
+        return fixedRateTimer("billing_scheduler",
+                daemon = false, // Do not run as deamon
+                // Start at tomorrow at midnight (local time)
+                startAt = Date.valueOf(LocalDate.now().plusDays(1)),
+                period = 216_000_000L   // Period is every day
+        ) {
+            // Run only if it's the right day of the month (first)
+            if (LocalDateTime.now().dayOfMonth == DAY_OF_THE_MONTH) {
+                payAll()
+            }
+        }
+    }
 
     fun payAll(): Collection<Invoice> {
         val invoices = payInvoices( invoiceService.fetchAll() )
@@ -24,7 +44,7 @@ class BillingService(
         return invoices
     }
 
-    fun payInvoices(allInvoices:Collection<Invoice>): Collection<Invoice> {
+    fun payInvoices(allInvoices: Collection<Invoice>): Collection<Invoice> {
         // Filter invoices and get only `PENDING` ones
         val invoices = allInvoices.filter { it.status == InvoiceStatus.PENDING }
         return runBlocking {
@@ -62,8 +82,7 @@ class BillingService(
                 true -> InvoiceStatus.PAID       // Correctly payed invoice
                 false -> InvoiceStatus.PENDING   // Insufficient amount
             }
-        }
-        catch (exception: Exception) {
+        } catch (exception: Exception) {
             status = when (exception) {
                 is CustomerNotFoundException -> InvoiceStatus.INVALID_CUSTOMER
                 is CurrencyMismatchException -> InvoiceStatus.CURRENCY_MISMATCH
