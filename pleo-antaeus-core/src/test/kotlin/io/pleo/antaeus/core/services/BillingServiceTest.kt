@@ -1,5 +1,6 @@
 package io.pleo.antaeus.core.services
 
+import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
 import io.pleo.antaeus.core.exceptions.CurrencyMismatchException
@@ -8,7 +9,11 @@ import io.pleo.antaeus.core.exceptions.NetworkException
 import io.pleo.antaeus.core.external.PaymentProvider
 import io.pleo.antaeus.data.AntaeusDal
 import io.pleo.antaeus.models.*
+import kotlinx.coroutines.*
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.assertThrows
+import java.util.concurrent.TimeUnit
+import kotlin.system.measureTimeMillis
 
 class BillingServiceTest {
 
@@ -29,7 +34,7 @@ class BillingServiceTest {
         every { charge(invoiceB) } returns false
         every { charge(invoiceC) } throws CustomerNotFoundException(3)
         every { charge(invoiceD) } throws CurrencyMismatchException(4, 2)
-        every { charge(invoiceE) } throws  NetworkException()
+        every { charge(invoiceE) } throws NetworkException()
     }
     val invoices = listOf(invoiceA, invoiceB, invoiceC, invoiceD, invoiceE)
     // Mock AntaeusDal
@@ -62,11 +67,26 @@ class BillingServiceTest {
     @Test
     fun `pay all invoices and must return true`() {
         val output = billingService.payInvoices(listOf(invoiceA, invoiceB, invoiceC, invoiceD, invoiceE)).toList()
-        assert( output[0].status == InvoiceStatus.PAID)
-        assert( output[1].status == InvoiceStatus.PENDING)
-        assert( output[2].status == InvoiceStatus.INVALID_CUSTOMER)
-        assert( output[3].status == InvoiceStatus.CURRENCY_MISMATCH)
-        assert( output[4].status == InvoiceStatus.NETWORK_ERROR)
+        assert(output[0].status == InvoiceStatus.PAID)
+        assert(output[1].status == InvoiceStatus.PENDING)
+        assert(output[2].status == InvoiceStatus.INVALID_CUSTOMER)
+        assert(output[3].status == InvoiceStatus.CURRENCY_MISMATCH)
+        assert(output[4].status == InvoiceStatus.NETWORK_ERROR)
+    }
+
+    @Test
+    fun `test timeouts and retries for paying invoices`() {
+        val paymentProviderWait = object : PaymentProvider {
+            override fun charge(invoice: Invoice): Boolean {
+                TimeUnit.SECONDS.sleep(2)
+                return true
+            }
+        }
+        val billingService = BillingService(paymentProviderWait, invoiceService)
+        assert(runBlocking { billingService.payInvoiceRetry(invoiceA, 1000L, 1) }.status == InvoiceStatus.UNKNOWN_ERROR)
+        assert(runBlocking { billingService.payInvoiceRetry(invoiceA, 2500L, 1) }.status == InvoiceStatus.PAID)
+        // Test if retries are executed by measuring execution time and checking if is greater than `timeout * retries`
+        assert(measureTimeMillis { runBlocking { billingService.payInvoiceRetry(invoiceA, 1000L, 3) } } > 2500L)
     }
 
 }

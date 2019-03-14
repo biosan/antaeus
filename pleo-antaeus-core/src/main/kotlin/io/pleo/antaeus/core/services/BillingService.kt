@@ -6,6 +6,11 @@ import io.pleo.antaeus.core.exceptions.NetworkException
 import io.pleo.antaeus.core.external.PaymentProvider
 import io.pleo.antaeus.models.Invoice
 import io.pleo.antaeus.models.InvoiceStatus
+import kotlinx.coroutines.*
+
+
+const val TIMEOUT = 3000L
+const val RETRIES = 5
 
 
 class BillingService(
@@ -22,8 +27,28 @@ class BillingService(
     fun payInvoices(allInvoices:Collection<Invoice>): Collection<Invoice> {
         // Filter invoices and get only `PENDING` ones
         val invoices = allInvoices.filter { it.status == InvoiceStatus.PENDING }
-        // Pay every invoice
-        return invoices.map { payInvoice(it) }.toList()
+        return runBlocking {
+            // Pay every invoice with a coroutine
+            invoices.map { async { payInvoiceRetry(it) } }
+                    .map { it.await() }
+                    .toList()
+        }
+    }
+
+
+    suspend fun payInvoiceRetry(invoice: Invoice,
+                                timeout: Long = TIMEOUT,
+                                retries: Int = RETRIES): Invoice {
+        var out: Invoice = invoice.copy(status = InvoiceStatus.UNKNOWN_ERROR)
+        for (i in 1..retries) {
+            try {
+                out = withTimeout(timeout) {
+                    async { payInvoice(invoice) }.await()   // TODO: Workaround
+                }
+                break
+            } catch (e: TimeoutCancellationException) { continue }
+        }
+        return out
     }
 
     fun payInvoice(invoice: Invoice): Invoice {
