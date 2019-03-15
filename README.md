@@ -51,7 +51,7 @@ Happy hacking 😁!
 
 ### Learn Kotlin
 
-I used Java a couple of times in the past, this is the first time with Kotlin. I spent the first day of the challenge to learn basics and some a bit more advanced concept that I think will be useful for beating Antaues, like coroutines.
+I used Java a couple of times in the past, this is the first time with Kotlin. I spent the first day of the challenge learning language basics first and then some more advanced concepts, like coroutines, that I think will be useful for beating Antaues.
 
 I love how concise and *"keystroke-efficent"* is compared to Java.
 
@@ -59,10 +59,10 @@ I love how concise and *"keystroke-efficent"* is compared to Java.
 ### Requirements and constraints
 
 1. `BillingService` must be executed in background without interferring with HTTP APIs or other services
-1. Invoices are charged through an external HTTP API calling `PaymentProvider.charge` and it's probable that the real API endpoint will vary depending on currency and clients.
-1. Invoices are added to the database throught an external service, there is no need to implement it in Antaeus for now.
-1. Since there must be a way to add invoices to the DB, the same system must be in charge of modify them if needed, and again Antaeus don't need to implement it now.
-1. Due to the fact that invoices are charged using an HTTP API, it's very likely that some errors will happen (network, timeouts, etc.), and that means that Antaeus will have to retry to charge the invoice.
+2. Invoices are charged through an external HTTP API calling `PaymentProvider.charge` and it's probable that the real API endpoint will vary depending on currency and clients.
+3. Invoices are added to the database throught an external service, there is no need to implement it in Antaeus for now.
+4. Since there must be a way to add invoices to the DB, the same system must be in charge of modify them if needed, and again Antaeus don't need to implement it now.
+5. Due to the fact that invoices are charged using an HTTP API, it's very likely that some errors will happen (network, timeouts, etc.), and that means that Antaeus will have to retry to charge the invoice.
 
 >Note: This are personal assumptions
 
@@ -74,6 +74,7 @@ I like simple and reliable systems, too much complexity is a bad thing and I'll 
 #### Scheduling execution
 
 The idea is to run Antaeus in background using a `Timer` that triggers every day at midnight, checks if it's the first day of the month and if it is, start paying every `PENDING` invoice.
+> Checking every day if it's the first day of the month look a bit inefficient, but actually is very cheap (performance-wise) to check if today is the right day and prevent some strange bugs that could happen when dealing with times and dates.
 
 #### Pay invoices
 
