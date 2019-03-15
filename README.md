@@ -105,6 +105,94 @@ Also other services could not be aware of an error if they are only logged.
 
 Another good solution could have been to add an enumerator subclass to `PENDING` and list error statuses here. Maybe in future improvments.
 
+
+#### Timeout, retry, and coroutines
+
+To retry payment and set a timeout for `charge` call I used coroutines.
+
+```kotlin
+// This constants inside `BillingService` set timeout and retries
+const val TIMEOUT = 3000L   // Timeout in milliseconds
+const val RETRIES = 5
+```
+
+`charge` is called inside `withTimeout` and if the call time exceed the timeout the function will try again to make the payment up to `RETRIES` times.
+
+
+### Documentation
+
+#### How to use `BillingService` 
+
+```kotlin
+// Instantiate
+val billingService = BillingService(paymentService, invoiceService)
+
+// Start background job that charge invoices
+//  on every first day of the month
+// Returns a `Timer` object
+val backgroundJob = billingService.start()
+
+// Stop the job
+backgroundJob.cancel()
+
+// Force the system to charge invoices (side-effect)
+// Returns all the input invoices with the new status.
+// NOTE: This function has side-effects, it fetch invoices
+//        from DB and then set it's status back into the DB.
+// NOTE: It retry to pay an invoice for 3 times and with
+//        a timeout of 3s by default
+billingService.payAll()
+
+// Force the system to charge invoices (pure function)
+// Returns all the input invoices with the new status.
+// NOTE: This is a pure function, you must pass it the invoices
+//        and make sure to update it's status in the DB.
+// NOTE: It retry to pay an invoice for 3 times and with
+//        a timeout of 3s by default
+billingService.payInvoices(invoices)
+
+
+// Pay a single invoice
+billingService.payInvoice(invoice)
+
+// Pay a single invoice with a timeout and retries
+// Timeout in milliseconds : `Long` - default to 3000ms (3s)
+// Retries : `Int` - default to 3
+billingService.payInvoiceRetry(invoice, 4000L, 5)   // Timeout 4s and 5 retries
+```
+
+#### Invoice status
+
+```kotlin
+enum class InvoiceStatus {
+    PAID,               // No action will be taken on this invoice
+    PENDING,            // It will be charged
+    PROCESSING,         // It is being charged
+    INVALID,            // Invoice is invalid for unspecified reasons
+    INVALID_CUSTOMER,   // Invoice is invalid. Customer doesn't exists
+    CURRENCY_MISMATCH,  // Invoice is invalid. Invoice and customer currency doesn't match
+    NETWORK_ERROR,      // Invoice has not been charged for some network error happened during charge (after 3 retries with 3s timeout)
+    UNKNOWN_ERROR,      // Invoice has not been charged for some unknown reason
+}
+```
+
+
+#### Settings
+
+All settings for now are hard coded inside `BillingService` class.
+
+```kotlin
+// Day of the month to pay invoices
+const val DAY_OF_THE_MONTH = 1
+
+// Invoice charge call timeout in milliseconds
+const val TIMEOUT = 3000L
+
+// Number of times to retry to charge an invoice
+const val RETRIES = 5
+```
+
+
 ## Libraries currently in use
 * [Exposed](https://github.com/JetBrains/Exposed) - DSL for type-safe SQL
 * [Javalin](https://javalin.io/) - Simple web framework (for REST)
