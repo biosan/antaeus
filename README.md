@@ -194,6 +194,17 @@ const val RETRIES = 5
 ```
 
 
+### Future improvements
+
+1. Better test coverage
+2. Move *error statuses* to their own enumerator
+3. Add a delay between retries
+4. Maybe a mail notification for specific error
+5. Force billing through, and start/stop service using the API
+6. Move hard-coded constants to environment variables
+7. Filter invoices by status (API)
+
+
 ## Libraries currently in use
 * [Exposed](https://github.com/JetBrains/Exposed) - DSL for type-safe SQL
 * [Javalin](https://javalin.io/) - Simple web framework (for REST)
